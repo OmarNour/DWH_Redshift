@@ -41,8 +41,8 @@ create table if not exists staging_events(
                                         status          integer,
                                         ts              BIGINT,
                                         userAgent       varchar(500),
-                                        userId          integer
-                                        );
+                                        userId          integer                                        
+                                        )diststyle all;
 """)
 # {"num_songs": 1, "artist_id": "ARJIE2Y1187B994AB7", "artist_latitude": null,
 #  "artist_longitude": null, "artist_location": "", "artist_name": "Line Renaud",
@@ -72,13 +72,16 @@ create table if not exists songplays(
                                     artist_id   varchar(50),
                                     session_id  integer not NULL,
                                     location    varchar(500),
-                                    user_agent  varchar(500)
+                                    user_agent  varchar(500),
+                                    foreign key(user_id) references users(user_id),
+                                    foreign key(song_id) references songs(song_id),
+                                    foreign key(artist_id) references artists(artist_id)
                                     );
 """)
 
 user_table_create = ("""
 create table if not exists users(
-                                user_id     integer PRIMARY KEY,
+                                user_id     integer PRIMARY KEY distkey,
                                 first_name  varchar(500),
                                 last_name   varchar(500),
                                 gender      char(1),
@@ -88,26 +91,28 @@ create table if not exists users(
 
 song_table_create = ("""
 create table if not exists songs(
-                                song_id     varchar(50) PRIMARY KEY,
+                                song_id     varchar(50) PRIMARY KEY distkey,
                                 title       varchar(500),
                                 artist_id   varchar(50),
                                 year        integer,
-                                duration    decimal(10,5)
+                                duration    decimal(10,5),
+                                foreign key(artist_id) references artists(artist_id)
                                 );
 """)
 
 artist_table_create = ("""
 create table if not exists artists(
-                                artist_id   varchar(50) PRIMARY KEY,
+                                artist_id   varchar(50) PRIMARY KEY distkey,
                                 name        varchar(500),
                                 location    varchar(500),
                                 lattitude   Decimal(9,6),
-                                longitude   Decimal(9,6));
+                                longitude   Decimal(9,6)
+                                );
 """)
 
 time_table_create = ("""
 create table if not exists time (
-                                start_time  timestamp PRIMARY KEY,
+                                start_time  timestamp PRIMARY KEY sortkey,
                                 hour        integer,
                                 day         integer,
                                 week        integer,
@@ -120,23 +125,27 @@ create table if not exists time (
 # STAGING TABLES
 
 staging_events_copy = ("""
+delete from staging_events;
 copy staging_events from {} 
 iam_role {}
 format as json {};
 """).format(log_data_s3, ARN, LOG_JSONPATH)
 
 staging_songs_copy = ("""
+delete from staging_songs;
 copy staging_songs from {} 
 iam_role {}
 json 'auto';
 """).format(song_data_s3, ARN)
 
 # FINAL TABLES
-
+# p1 target table, p2 source query, p3 target table,
 user_table_insert = ("""
+create temp table stage (like users); 
+
 insert 
 into
-    users
+    stage
     (select
         userId user_id,
         firstName first_name,
@@ -146,13 +155,26 @@ into
     from
         staging_events                      
     where
-        userId is not null); 
+        userId is not null);
+        
+begin transaction;  
+      
+delete from users 
+using stage 
+where users.user_id = stage.user_id;
+
+insert into users 
+select * from stage;
+
+end transaction;
+drop table stage;         
 """)
 
 song_table_insert = ("""
+create temp table stage (like songs);
 insert 
 into
-    songs
+    stage
     ( select
         song_id,
         title,
@@ -163,12 +185,25 @@ into
         staging_songs     
     where
         song_id is not null);
+        
+begin transaction;        
+delete from songs 
+using stage 
+where songs.song_id = stage.song_id;
+
+insert into songs 
+select * from stage;
+
+end transaction;
+drop table stage;          
 """)
 
 artist_table_insert = ("""
+create temp table stage (like artists);
+
 insert 
 into
-    artists
+    stage
     (select
         artist_id,
         artist_name name,
@@ -179,9 +214,21 @@ into
         staging_songs     
     where
         artist_id is not null);
+begin transaction;        
+delete from artists 
+using stage 
+where artists.artist_id = stage.artist_id;
+
+insert into artists 
+select * from stage;
+
+end transaction;
+drop table stage;          
 """)
 
 time_table_insert = ("""
+delete from time;
+
 insert  
 into
     time
@@ -198,27 +245,27 @@ into
 """)
 
 songplay_table_insert = ("""
+delete from songplays;
+
 insert 
 into
     songplays
     (start_time, user_id, level, song_id, artist_id, session_id, location, user_agent)
     (select
+        distinct 
         (TIMESTAMP 'epoch' + ts * INTERVAL '0.001 Second ') start_time,
         userId user_id,
         level,
         s.song_id,
-        a.artist_id,
+        s.artist_id,
         sessionId session_id,
         e.location,
         userAgent user_agent  
     from
-        staging_events e 
+        staging_songs s  
     join
-        artists a 
-            on a.name = e.artist 
-    join
-        songs s 
-            on s.artist_id = a.artist_id 
+        staging_events e
+            on s.artist_name = e.artist 
             and s.title = e.song 
             and s.duration = e.length 
     where
@@ -230,7 +277,7 @@ drop_staging_table_queries = [staging_events_table_drop, staging_songs_table_dro
 drop_dwh_table_queries = [songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
 
 create_staging_table_queries = [staging_events_table_create, staging_songs_table_create]
-create_dwh_table_queries = [songplay_table_create, user_table_create, song_table_create, artist_table_create, time_table_create]
+create_dwh_table_queries = [user_table_create, artist_table_create, song_table_create, time_table_create, songplay_table_create]
 
 copy_table_queries = [staging_events_copy, staging_songs_copy]
 insert_table_queries = [user_table_insert, artist_table_insert, song_table_insert, time_table_insert, songplay_table_insert]
