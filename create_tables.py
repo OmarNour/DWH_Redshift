@@ -4,6 +4,13 @@ from sql_queries import create_staging_table_queries, drop_staging_table_queries
 
 
 def drop_tables(cur, conn, tables_list):
+    """
+    to drop tables given in a list
+    :param cur:
+    :param conn:
+    :param tables_list:
+    :return:
+    """
     for query in tables_list:
         print(query)
         cur.execute(query)
@@ -11,6 +18,13 @@ def drop_tables(cur, conn, tables_list):
 
 
 def create_tables(cur, conn, tables_list):
+    """
+    to create tables given in a list
+    :param cur:
+    :param conn:
+    :param tables_list:
+    :return:
+    """
     for query in tables_list:
         print(query)
         cur.execute(query)
@@ -18,6 +32,10 @@ def create_tables(cur, conn, tables_list):
 
 
 def main():
+    """
+    main method that calls drop_tables then create_tables for a given list of tables
+    :return:
+    """
     config = configparser.ConfigParser()
     config.read('dwh.cfg')
 

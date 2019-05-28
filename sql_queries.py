@@ -7,8 +7,8 @@ config.read('dwh.cfg')
 
 ARN = config.get("IAM_ROLE","ARN")
 log_data_s3 = config.get("S3","LOG_DATA")
-# song_data_s3 = config.get("S3","SONG_DATA")
-song_data_s3 = config.get("S3","SAMPLE_SONG_DATA")
+song_data_s3 = config.get("S3","SONG_DATA")
+# song_data_s3 = config.get("S3","SAMPLE_SONG_DATA")
 LOG_JSONPATH = config.get("S3","LOG_JSONPATH")
 # DROP TABLES
 
@@ -125,24 +125,49 @@ create table if not exists time (
 # STAGING TABLES
 
 staging_events_copy = ("""
-delete from staging_events;
-copy staging_events from {} 
+create temp table stage (like staging_events);
+copy stage from {} 
 iam_role {}
 format as json {};
+
+begin transaction;        
+delete from staging_events 
+using stage 
+where nvl(staging_events.userId, -1) = nvl(stage.userId, -1)
+and staging_events.sessionId = stage.sessionId
+and staging_events.ts = stage.ts
+and staging_events.page = stage.page;
+
+insert into staging_events 
+select * from stage;
+end transaction;
+drop table stage; 
+
 """).format(log_data_s3, ARN, LOG_JSONPATH)
 
 staging_songs_copy = ("""
-delete from staging_songs;
-copy staging_songs from {} 
+create temp table stage (like staging_songs);
+copy stage from {} 
 iam_role {}
 json 'auto';
+
+begin transaction;        
+delete from staging_songs 
+using stage 
+where staging_songs.song_id = stage.song_id
+and staging_songs.artist_id = stage.artist_id;
+
+insert into staging_songs 
+select * from stage;
+
+end transaction;
+drop table stage; 
 """).format(song_data_s3, ARN)
 
 # FINAL TABLES
 # p1 target table, p2 source query, p3 target table,
 user_table_insert = ("""
 create temp table stage (like users); 
-
 insert 
 into
     stage
@@ -227,11 +252,11 @@ drop table stage;
 """)
 
 time_table_insert = ("""
-delete from time;
+create temp table stage (like time);
 
 insert  
 into
-    time
+    stage
     ( SELECT
         (TIMESTAMP 'epoch' + ts * INTERVAL '0.001 Second ') start_time,
         extract(hour from start_time) as "hour",
@@ -242,6 +267,17 @@ into
         extract(weekday from start_time) as "weekday" 
     FROM
         staging_events);
+
+begin transaction;        
+delete from time 
+using stage 
+where time.start_time = stage.start_time;
+
+insert into time 
+select * from stage;
+
+end transaction;
+drop table stage;            
 """)
 
 songplay_table_insert = ("""

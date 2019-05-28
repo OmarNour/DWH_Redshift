@@ -4,18 +4,34 @@ from sql_queries import copy_table_queries, insert_table_queries
 
 
 def load_staging_tables(cur, conn):
+    """
+    to load staging tables from S3 bucket
+    :param cur:
+    :param conn:
+    :return:
+    """
     for query in copy_table_queries:
         cur.execute(query)
         conn.commit()
 
 
 def insert_tables(cur, conn):
+    """
+    to load fact and dimension tables from staging tables
+    :param cur:
+    :param conn:
+    :return:
+    """
     for query in insert_table_queries:
         cur.execute(query)
         conn.commit()
 
 
 def main():
+    """
+    main method that calls load_staging_tables then insert_tables
+    :return:
+    """
     config = configparser.ConfigParser()
     config.read('dwh.cfg')
 
