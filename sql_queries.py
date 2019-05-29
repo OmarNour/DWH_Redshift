@@ -68,8 +68,8 @@ create table if not exists songplays(
                                     start_time  timestamp not NULL,
                                     user_id     integer not NULL,
                                     level       varchar(10),
-                                    song_id     varchar(50),
-                                    artist_id   varchar(50),
+                                    song_id     varchar(50) NOT NULL,
+                                    artist_id   varchar(50) NOT NULL,
                                     session_id  integer not NULL,
                                     location    varchar(500),
                                     user_agent  varchar(500),
@@ -102,7 +102,7 @@ create table if not exists songs(
 
 artist_table_create = ("""
 create table if not exists artists(
-                                artist_id   varchar(50) PRIMARY KEY distkey,
+                                artist_id   varchar(50) NOT NULL PRIMARY KEY distkey,
                                 name        varchar(500),
                                 location    varchar(500),
                                 lattitude   Decimal(9,6),
@@ -168,19 +168,20 @@ drop table stage;
 # p1 target table, p2 source query, p3 target table,
 user_table_insert = ("""
 create temp table stage (like users); 
-insert 
+insert  
 into
     stage
-    (select
+    (select distinct
         userId user_id,
         firstName first_name,
         lastName last_name,
         gender,
-        level                      
+        level                           
     from
-        staging_events                      
+        staging_events                           
     where
-        userId is not null);
+        page = 'NextSong'         
+        and userId is not null);
         
 begin transaction;  
       
@@ -200,7 +201,7 @@ create temp table stage (like songs);
 insert 
 into
     stage
-    ( select
+    ( select distinct
         song_id,
         title,
         artist_id,
@@ -229,7 +230,7 @@ create temp table stage (like artists);
 insert 
 into
     stage
-    (select
+    (select distinct
         artist_id,
         artist_name name,
         artist_location as "location",
@@ -257,8 +258,9 @@ create temp table stage (like time);
 insert  
 into
     stage
-    ( SELECT
-        (TIMESTAMP 'epoch' + ts * INTERVAL '0.001 Second ') start_time,
+    ( SELECT distinct
+        --(TIMESTAMP 'epoch' + ts * INTERVAL '0.001 Second ') start_time,
+        start_time,
         extract(hour from start_time) as "hour",
         extract(day from start_time) as "day",
         extract(week from start_time) as "week",
@@ -266,7 +268,7 @@ into
         extract(year from start_time) as "year",
         extract(weekday from start_time) as "weekday" 
     FROM
-        staging_events);
+        songplays);
 
 begin transaction;        
 delete from time 
@@ -316,4 +318,4 @@ create_staging_table_queries = [staging_events_table_create, staging_songs_table
 create_dwh_table_queries = [user_table_create, artist_table_create, song_table_create, time_table_create, songplay_table_create]
 
 copy_table_queries = [staging_events_copy, staging_songs_copy]
-insert_table_queries = [user_table_insert, artist_table_insert, song_table_insert, time_table_insert, songplay_table_insert]
+insert_table_queries = [user_table_insert, artist_table_insert, song_table_insert, songplay_table_insert, time_table_insert]
