@@ -6,9 +6,9 @@ from sql_queries import copy_table_queries, insert_table_queries
 def load_staging_tables(cur, conn):
     """
     to load staging tables from S3 bucket
-    :param cur:
-    :param conn:
-    :return:
+    :param cur: an instance to execute database commands
+    :param conn: a connection object that creates a connection to database
+    :return: none
     """
     for query in copy_table_queries:
         cur.execute(query)
@@ -18,9 +18,9 @@ def load_staging_tables(cur, conn):
 def insert_tables(cur, conn):
     """
     to load fact and dimension tables from staging tables
-    :param cur:
-    :param conn:
-    :return:
+    :param cur: an instance to execute database commands
+    :param conn: a connection object that creates a connection to database
+    :return: none
     """
     for query in insert_table_queries:
         cur.execute(query)
@@ -30,7 +30,7 @@ def insert_tables(cur, conn):
 def main():
     """
     main method that calls load_staging_tables then insert_tables
-    :return:
+    :return: none
     """
     config = configparser.ConfigParser()
     config.read('dwh.cfg')

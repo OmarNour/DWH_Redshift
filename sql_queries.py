@@ -44,9 +44,7 @@ create table if not exists staging_events(
                                         userId          integer                                        
                                         )diststyle all;
 """)
-# {"num_songs": 1, "artist_id": "ARJIE2Y1187B994AB7", "artist_latitude": null,
-#  "artist_longitude": null, "artist_location": "", "artist_name": "Line Renaud",
-#  "song_id": "SOUPIRU12A6D4FA1E1", "title": "Der Kleine Dompfaff", "duration": 152.92036, "year": 0}
+
 staging_songs_table_create = ("""
 create table if not exists staging_songs(
                                         num_songs           integer,
@@ -165,7 +163,6 @@ drop table stage;
 """).format(song_data_s3, ARN)
 
 # FINAL TABLES
-# p1 target table, p2 source query, p3 target table,
 user_table_insert = ("""
 create temp table stage (like users); 
 insert  
